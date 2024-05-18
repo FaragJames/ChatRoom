@@ -1,0 +1,108 @@
+﻿@page "/chatroom"
+@using System.Text.Json
+@model ChatRoomModel
+@{
+    ViewBag.Title = "Chat Room";
+}
+
+
+<section>
+    <div class="container">
+        <ul id="messagesList" class="list-group">
+            @await foreach (var message in Model.Messages)
+            {
+                <li class="list-group-item">@message.User!.Username: @message.Content - @message.DateTime</li>
+            }
+        </ul>
+    </div>
+
+    <div class="container mt-4">
+        <form method="post">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+            <div>
+                <div>
+                    <input asp-for="Message.UserId" value="@User.FindFirst(ClaimTypes.NameIdentifier)!.Value" />
+                    <input asp-for="Message.DateTime" />
+                </div>
+
+                <div class="form-group">
+                    <span asp-validation-for="Message.Content" class="text-danger"></span>
+                    <div>
+                        <label asp-for="Message.Content"></label>
+                        <input asp-for="Message.Content" class="form-control" />
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Send</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="root"></div>
+</section>
+
+<script src="~/js/signalr/dist/browser/signalr.js"></script>
+<script>
+    var connection = new signalR.HubConnectionBuilder().withUrl("/chatHub").build();
+
+    connection.on("ReceiveMessage", function (message) {
+        var object = JSON.parse(message);
+
+        var li = document.createElement("li");
+        li.className = "list-group-item"
+        li.textContent = `${object.Username}: ${object.Content} - ${object.DateTime}`;
+
+        document.getElementById("messagesList").appendChild(li);
+    });
+
+    connection.start().then(function () {
+    }).catch(function (err) {
+        return console.error(err.toString());
+    });
+</script>
+
+@functions {
+    [Authorize]
+    public class ChatRoomModel : PageModel
+    {
+        public IAsyncEnumerable<Message> Messages = AsyncEnumerable.Empty<Message>();
+        [BindProperty]
+        public Message Message { get; set; } = new();
+
+        private RealTimeDbContext _context;
+        private IHubContext<ChatHub> _hubContext;
+
+
+        public ChatRoomModel(RealTimeDbContext context, IHubContext<ChatHub> hubContext)
+        {
+            _context = context;
+            _hubContext = hubContext;
+        }
+        public void OnGet()
+        {
+            Messages = _context.Messages.Include(_ => _.User).OrderBy(_ => _.DateTime).AsAsyncEnumerable();
+        }
+        public async Task<IActionResult> OnPostAsync()
+        {
+            if (ModelState.IsValid)
+            {
+                Message.DateTime = DateTime.Now;
+                Message.Content = Message.Content.Trim();
+                await _context.AddAsync(Message);
+                await _context.SaveChangesAsync();
+
+                string json = JsonSerializer.Serialize(new
+                {
+                    Username = User.Identity!.Name,
+                    Content = Message.Content,
+                    DateTime = Message.DateTime.ToString()
+                });
+                await _hubContext.Clients.All.SendAsync("ReceiveMessage", json);
+
+                return RedirectToPage();
+            }
+            return Page();
+        }
+    }
+}

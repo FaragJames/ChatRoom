@@ -1,0 +1,23 @@
+﻿@page
+@model IndexModel
+@{
+    ViewBag.Title = "Home Page";
+    string name = User.Identity != null && User.Identity.IsAuthenticated ?
+        $", {User.Identity.Name}" : string.Empty;
+}
+
+
+<section class="bg-light p-3 mb-4">
+    <h1 class="display-4">Welcome to our new Chat Room website@(name)!</h1>
+    <button type="button" class="btn btn-primary" onclick="location.href='@Url.Page("/ChatRoom")'">Let's Chat</button>
+</section>
+
+
+@functions {
+    public class IndexModel : PageModel
+    {
+        public void OnGet()
+        {
+        }
+    }
+}

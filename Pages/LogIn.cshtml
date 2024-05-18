@@ -1,0 +1,90 @@
+﻿@page "/account/login"
+@model LogInModel
+@{
+    ViewBag.Title = "Log In";
+}
+
+
+<section>
+    <form method="post">
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+        <div>
+            <div class="form-group">
+                <span asp-validation-for="_User.Username" class="text-danger"></span>
+                <div>
+                    <label asp-for="_User.Username"></label>
+                    <input asp-for="_User.Username" class="form-control" />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <span asp-validation-for="_User.Password" class="text-danger"></span>
+                <div>
+                    <label asp-for="_User.Password"></label>
+                    <input asp-for="_User.Password" class="form-control" />
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Log in</button>
+        </div>
+    </form>
+</section>
+
+
+@functions {
+    [AllowAnonymous]
+    public class LogInModel : PageModel
+    {
+        [BindProperty(SupportsGet = true)]
+        public string? ReturnUrl { get; set; } = "/Index";
+        [BindProperty]
+        public User _User { get; set; } = new();
+
+        private RealTimeDbContext _context;
+        private IHubContext<ChatHub> _hubContext;
+
+
+        public LogInModel(RealTimeDbContext context, IHubContext<ChatHub> hubContext)
+        {
+            _context = context;
+            _hubContext = hubContext;
+        }
+        public void OnGet()
+        {
+        }
+        public async Task<IActionResult> OnPostAsync()
+        {
+            if (ModelState.IsValid)
+            {
+                if (_User.Username.StartsWith(' ') || _User.Username.EndsWith(' '))
+                {
+                    ModelState.AddModelError("", $"The {nameof(_User.Username)} field must not contain any leading or trailing white-space characters.");
+                    return Page();
+                }
+                User? databaseUser = _context.Users
+                    .Where(_ => _.Username == _User.Username && _.Password == _User.Password)
+                    .FirstOrDefault();
+
+
+                if(databaseUser != null)
+                {
+                    await Global.SignInAsync(HttpContext, databaseUser.Id, databaseUser.Username);
+
+                    return Url.IsLocalUrl(ReturnUrl) ?
+                        RedirectToPage(ReturnUrl) : RedirectToPage("/Index");
+                }
+                ModelState.AddModelError("", "Username was not found or password is incorrect.");
+            }
+
+            return Page();
+        }
+
+        [Authorize]
+        public async Task<IActionResult> OnGetLogOutAsync()
+        {
+            await HttpContext.SignOutAsync();
+            return RedirectToPage("/Index");
+        }
+    }
+}

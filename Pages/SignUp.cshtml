@@ -1,0 +1,102 @@
+﻿@page "/signup"
+@model SignUpModel
+@{
+    ViewBag.Title = "Sign Up";
+}
+
+
+<section>
+    <form method="post">
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+        <div>
+            <div class="form-group">
+                <span asp-validation-for="UserCredentials.Username" class="text-danger"></span>
+                <div>
+                    <label asp-for="UserCredentials.Username"></label>
+                    <input asp-for="UserCredentials.Username" class="form-control" />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <span asp-validation-for="UserCredentials.Password" class="text-danger"></span>
+                <div>
+                    <label asp-for="UserCredentials.Password"></label>
+                    <input asp-for="UserCredentials.Password" class="form-control" />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <span asp-validation-for="UserCredentials.ConfirmPassword" class="text-danger"></span>
+                <div>
+                    <label asp-for="UserCredentials.ConfirmPassword"></label>
+                    <input asp-for="UserCredentials.ConfirmPassword" class="form-control" />
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Create account</button>
+        </div>
+    </form>
+</section>
+
+
+@functions {
+    public class SignUpModel : PageModel
+    {
+        [BindProperty]
+        public CredentialsViewModel UserCredentials { get; set; } = new();
+
+        private RealTimeDbContext _context;
+
+
+        public SignUpModel(RealTimeDbContext context)
+        {
+            _context = context;
+        }
+        public void OnGet()
+        {
+        }
+        public async Task<IActionResult> OnPostAsync()
+        {
+            if (ModelState.IsValid)
+            {
+                if (UserCredentials.Username.StartsWith(' ') || UserCredentials.Username.EndsWith(' '))
+                {
+                    ModelState.AddModelError("", $"The {nameof(CredentialsViewModel.Username)} field must not contain any leading or trailing white-space characters.");
+                    return Page();
+                }
+                if (UserCredentials.Password.StartsWith(' ') || UserCredentials.Password.EndsWith(' '))
+                {
+                    ModelState.AddModelError("", $"The {nameof(CredentialsViewModel.Password)} field must not contain any leading or trailing white-space characters.");
+                    return Page();
+                }
+
+
+                User user = new() { Username = UserCredentials.Username, Password = UserCredentials.Password };
+                await _context.AddAsync(user);
+                try
+                {
+                    await _context.SaveChangesAsync();
+                    await Global.SignInAsync(HttpContext, user.Id, UserCredentials.Username);
+
+                    return RedirectToPage("/Index");
+                }
+                catch (Exception)
+                {
+                    ModelState.AddModelError("", "Failed to create an account. Please try another username.");
+                }
+            }
+            return Page();
+        }
+
+        public class CredentialsViewModel
+        {
+            [Required, StringLength(25)]
+            public string Username { get; set; } = string.Empty;
+            [Required, DataType(DataType.Password), StringLength(maximumLength: 20, MinimumLength = 8)]
+            public string Password { get; set; } = string.Empty;
+            [Required, DataType(DataType.Password), Compare(nameof(Password))]
+            public string ConfirmPassword { get; set; } = string.Empty;
+        }
+    }
+}
